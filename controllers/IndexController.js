@@ -9,15 +9,20 @@ module.exports = {
   async authenticate(req, res) {
     try {
       const username = req.body.username;
+      //Hashing the password to store
       const password = await bcrypt.hash(req.body.password, saltRounds);
+      // Type = 'student' or 'teacher'
       const type = req.body.type;
 
       if (type == "student") {
+        //Create new Instance in Student schema
         const new_user = new models.Student({
           username: username,
           password: password,
         });
         const student = await new_user.save();
+
+        //Creating a signing a JWT token for authentication of logged in user
         var token = jwt.sign({ id: student._id }, secret, {
           expiresIn: 86400 * 10, // 24 hours
         });
@@ -30,6 +35,8 @@ module.exports = {
           accessToken: token,
         });
       } else if (type == "teacher") {
+        //Create new Instance in Teacher schema
+
         const new_user = new models.Teacher({
           username: username,
           password: password,
@@ -57,6 +64,7 @@ module.exports = {
   },
   async createAssignment(req, res) {
     try {
+      //If a user is not logged in return from endpoint
       if (Object.keys(user).length === 0) {
         return res.status(500).send("Not Signed In");
       }
@@ -69,6 +77,8 @@ module.exports = {
         .slice(0, 10);
       console.log(published_date);
       const deadline = new Date(req.body.deadline).toISOString().slice(0, 10);
+
+      //Assigning status based on current date
       if (published_date > datetime) {
         console.log("In If");
         status = "SCHEDULED";
@@ -79,6 +89,7 @@ module.exports = {
 
       console.log(datetime);
 
+      // Creating a new Assignment Instance
       const new_submission = new models.Assignment({
         description: req.body.description,
         teacher: req.body.teacher,
@@ -89,6 +100,7 @@ module.exports = {
       });
       const sub = await new_submission.save();
 
+      // For each student in the list create a Submission instance with status as PENDING
       for (var i = 0; i < students.length; i++) {
         const new_student = new models.Submission({
           student: students[i],
@@ -113,26 +125,23 @@ module.exports = {
       });
     }
   },
-  async getAllAssignment(req,res){
-
-    try{
+  async getAllAssignment(req, res) {
+    try {
       const all_assign = await models.Assignment.find();
       return res.status(200).json({
         success: true,
         message: "Successfully created",
         all_assign,
       });
-
-    }
-    catch (err) {
+    } catch (err) {
       console.log(err);
       return res.status(500).json({
         success: false,
         message: "Failed to Get",
       });
     }
-
   },
+  //uPDATING ASSIGNMENT BASED ON ID
   async updateAssignment(req, res) {
     try {
       console.log(req.params.id);
@@ -153,6 +162,7 @@ module.exports = {
       });
     }
   },
+  //DELETING BASED ON ID
   async deleteAssignment(req, res) {
     try {
       const assignmentDelete = await models.Assignment.findByIdAndRemove(
@@ -179,7 +189,10 @@ module.exports = {
         assignment: req.body.assignment,
         status: "SUBMITTED",
       };
+      // Count number of submissions a student made for a specific assignment(only one can be made)
       const findSub = await models.Submission.countDocuments(query);
+
+      // If submission is not done
       if (findSub === 0) {
         const q = {
           student: user.name,
@@ -196,7 +209,9 @@ module.exports = {
           message: "Successfully Submitted",
           updateSub,
         });
-      } else {
+      }
+      //If submission is done
+      else {
         return res.status(500).json({
           success: false,
           message: "Assignment already Submitted",
@@ -213,6 +228,7 @@ module.exports = {
 
   async detailsAssignment(req, res) {
     try {
+      // If Student is making the request get details of Successful submissions made by the student for a specific assignment
       if (user.type == "student") {
         const q = {
           student: user.name,
@@ -225,7 +241,9 @@ module.exports = {
           message: "Successfully Submitted",
           getDetails,
         });
-      } else if (type == "teacher") {
+      }
+      // If teacher is making the request get details of submissions made by all the students for a specific assignment created by teacher
+      else if (type == "teacher") {
         const q = {
           teacher: user.name,
           assignment: req.body.assignment,
@@ -248,6 +266,7 @@ module.exports = {
   },
   async assignmentFeed(req, res) {
     try {
+      // If teacher makes the request return all the assignments created by the teacher
       if (user.type === "teacher") {
         const q = { teacher: user.name, status: req.body.filter };
         const filtered = await models.Assignment.find(q);
@@ -256,16 +275,18 @@ module.exports = {
           message: "Successfully Filtered",
           filtered,
         });
-      } else if (user.type === "student") {
-
+      }
+      // If Student makes the request return all the assignments assigned to student based on filtera
+      else if (user.type === "student") {
         var q;
 
-        if(req.body.filter==="ALL")
-            q = { student: user.name };
-        else if(req.body.filter==="PENDING" || req.body.filter==="SUBMITTED")
-            q = { student: user.name, status: req.body.filter };
+        if (req.body.filter === "ALL") q = { student: user.name };
+        else if (
+          req.body.filter === "PENDING" ||
+          req.body.filter === "SUBMITTED"
+        )
+          q = { student: user.name, status: req.body.filter };
 
-            
         const filtered = await models.Submission.find(q);
         return res.status(200).json({
           success: true,
