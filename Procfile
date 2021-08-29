@@ -1,1 +1,1 @@
-web: gunicorn feature_app:app 
+web: nodemon start
